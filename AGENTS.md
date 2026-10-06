@@ -32,8 +32,8 @@ bun run e2e              # optional live test against real `omp -p` (see below)
 - **e2e usage:**
   - `bun run e2e -- --keep` — keep scratch dir + session jsonl for debugging
     (default: deleted on pass, kept on fail).
-  - `OMP_CONTINUE_MIN_TOOLS=1 bun run e2e` — env passthrough (also
-    `OMP_CONTINUE_MAX_NUDGES`); defaults 2/2 so a small task crosses the gate.
+  - `OMP_CONTINUE_MIN_TOOLS=2 bun run e2e` — env passthrough to raise the gate
+    for the probe (also `OMP_CONTINUE_MAX_NUDGES`); e2e default 2/2.
   - No `omp` on PATH → exits 0 with skip message (never fails CI/unit runs).
   - Exit 1 on FAIL with artifact path printed.
 - **e2e is non-deterministic (real model).** A FAIL means "debug with the kept

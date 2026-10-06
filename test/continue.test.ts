@@ -44,12 +44,16 @@ describe("continue-on-early-stop", () => {
     await p1.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "done\nALL_TASKS_DONE" }] } });
     await p1.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(p1._sent.length).toBe(0);
-    const p2 = makePi(); continueOnEarlyStop(p2); await sess(p2);
+    const p2 = makePi(); continueOnEarlyStop(p2);
+    (p2 as unknown as { getFlag: (n: string) => unknown }).getFlag = (n: string) => n === "continue-min-tools" ? 5 : undefined;
+    await sess(p2);
     await p2.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 4; i++) { await p2.emit("tool_call", { toolName: "read", input: { path: "a" } }); await p2.emit("tool_result", { toolName: "read", content: [] }); }
     await p2.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(p2._sent.length).toBe(0);
-    const p3 = makePi(); continueOnEarlyStop(p3); await sess(p3);
+    const p3 = makePi(); continueOnEarlyStop(p3);
+    (p3 as unknown as { getFlag: (n: string) => unknown }).getFlag = (n: string) => n === "continue-min-tools" ? 5 : undefined;
+    await sess(p3);
     await p3.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) {
       await p3.emit("tool_call", { toolName: "read", input: { path: "a" } });

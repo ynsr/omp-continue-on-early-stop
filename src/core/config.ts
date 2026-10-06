@@ -1,5 +1,5 @@
 export const DEFAULT_MAX_NUDGES = 20;
-export const DEFAULT_MIN_TOOLS = 5;
+export const DEFAULT_MIN_TOOLS = 1;
 
 function toNum(v: unknown, fb: number): number {
   if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
