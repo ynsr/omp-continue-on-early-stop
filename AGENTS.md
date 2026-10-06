@@ -47,3 +47,79 @@ bun run e2e              # optional live test against real `omp -p` (see below)
   `message_end` = detect-only fallback for older hosts.
 - Tool errors (`tool_result.isError`) fully ignored; only provider-level errors
   suppress nudges.
+
+## The full end-of-turn event picture
+
+(Harness: pi-coding-agent 0.84.4 / omp 18.5.1. References: `ExtensionAPI.on`
+overloads in `node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts`.)
+
+```mermaid
+prompt submitted
+  │
+  ▼
+before_agent_start ──► extension appends CONTRACT to systemPrompt
+  │
+  ▼
+agent_start ──► loop begins
+  │
+  ▼
+┌─ per TURN ──────────────────────────────
+│ turn_start
+│   │  model streams: message_start → message_update* ──► assistant_message hook
+│   │                      (awaited rewrite BEFORE history/context persistence)
+│   │  tool batch: tool_call → tool_execution_* → tool_result (+extension tool_call/tool_result)
+│   │  model text finalizes: message_end (OBSERVE-ONLY result — no rewrite path)
+│ turn_end ──► extension adjudicates (nudge? log?)
+│   │  harness drains STEERING queue → injected before next LLM call
+│   └──► more turns, or loop would exit ──► harness drains FOLLOWUP queue
+│                                         └──► still nothing? exit loop
+└─────────────────────────────────────────
+  │
+  ▼
+agent_end (messages snapshot; observe-only)
+  │
+  ▼
+retry / compaction / queued-continuation checks
+  │
+  ▼
+agent_settled ──► "fully done, nothing pending anywhere"
+```
+
+### Confusing pairs
+
+- **`turn_end` vs `agent_end`**: per-turn vs once-per-run. The adjudicator
+  listens to both: premature stops surface as a stalled last turn
+  (`agent_end`) or a mid-run stall (`turn_end`). Neither means "task complete".
+- **`message_end` is NOT the rewrite hook.** It looks like one (returns
+  `MessageEndEventResult`), but the harness ignores the return for
+  history/transcript — proven live (token persisted verbatim). The awaited
+  **`assistant_message`** hook (PR #13769, newer than bundled 0.84.4 types, so
+  registered untyped) rewrites content before persistence. `message_end`
+  stays as detect-only fallback for older hosts.
+- **`agent_end` vs `agent_settled`**: `agent_end` = loop exited, but
+  retry/compaction/queued-continuation may re-enter. `agent_settled` = truly
+  terminal. Nudging uses `turn_end`/`agent_end` (must catch the stall *before*
+  settle); queue-hold release uses `agent_settled` (releasing at `agent_end`
+  could inject into a compaction retry).
+- **`after_provider_response` (status) vs `tool_result` (isError)**:
+  provider 4xx/5xx/abort = model not continuable → suppress nudge. Tool
+  `isError` = normal harness→model feedback → fully ignored. Different
+  layers, different handling.
+- **`input` vs `sendUserMessage`**: `input` = harness→extension gate on
+  *incoming* user text (`{action:"continue"|"transform"|"handled"}`, sees
+  `streamingBehavior: steer|followUp`). `sendUserMessage` = extension→harness
+  injection (nudge path, `deliverAs:"followUp"`). Queue-hold uses both: veto
+  on `input`, release via `sendUserMessage`.
+- **Extension `tool_call` vs `tool_execution_*`**: intent-to-call vs execution
+  progress. The net-success counter uses `tool_call`/`tool_result`
+  (intent + outcome), not execution internals.
+
+### Role assignment
+
+The completion token (`DONE_WAITING_USER_PROMPT`) is model-uttered text,
+observed at the `assistant_message` hook (strip + `hasToken` flag). Harness
+events don't carry it — `turn_end`/`agent_end` are where we *adjudicate
+using* the flag, and `agent_settled` is where the queue-hold *releases*.
+Each event has its role; the token doesn't move, only its name did
+(`ALL_TASKS_DONE` → `DONE_WAITING_USER_PROMPT`: the token announces "this
+unit of work is closed, ready for your next prompt", not global completion).

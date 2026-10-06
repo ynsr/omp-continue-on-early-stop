@@ -56,3 +56,5 @@ Zero runtime dependencies (types-only `pi-coding-agent`).
 bun test            # run the suite (bun:test)
 bun x tsc --noEmit  # typecheck
 ```
+
+Architecture (harness event flow, hook roles) → `AGENTS.md`.
