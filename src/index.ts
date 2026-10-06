@@ -81,7 +81,7 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
     } catch { /* never throw */ }
   });
   const adjudicate = async () => {
-    if (toolCalls === 0 && hasToken) { try { log("continue-on-early-stop suspect-token", {}); } catch { /* ignore */ } }
+    if (toolCalls === 0 && hasToken && nudges === 0) { try { log("continue-on-early-stop suspect-token", {}); } catch { /* ignore */ } }
     const { fire, reason } = shouldContinue({ toolCalls, minTools, hasToken, errorFlag, nudges, maxNudges });
     if (!fire) {
       if (!settledLogged) { settledLogged = true; try { log("continue-on-early-stop turn-settled", { reason, toolCalls }); } catch { /* ignore */ } }
