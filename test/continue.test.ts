@@ -85,4 +85,19 @@ describe("continue-on-early-stop", () => {
     }
     expect(pi._sent.length).toBe(20);
   });
+  test("failed async send does not consume budget", async () => {
+    const pi = makePi();
+    let calls = 0;
+    (pi as unknown as { sendUserMessage: (c: unknown, o?: unknown) => Promise<void> }).sendUserMessage = (_c: unknown, _o?: unknown) => {
+      calls++;
+      return calls === 1 ? Promise.reject(new Error("queue full")) : Promise.resolve();
+    };
+    continueOnEarlyStop(pi);
+    await sess(pi);
+    await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
+    for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
+    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    expect(calls).toBe(2);
+  });
 });

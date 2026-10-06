@@ -62,7 +62,7 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
       return { message: { ...orig, content } };
     } catch { /* never throw */ }
   });
-  const adjudicate = () => {
+  const adjudicate = async () => {
     if (toolCalls === 0 && hasToken) { try { log("continue-on-early-stop suspect-token", {}); } catch { /* ignore */ } }
     const { fire, reason } = shouldContinue({ toolCalls, minTools, hasToken, errorFlag, nudges, maxNudges });
     if (!fire) {
@@ -71,12 +71,13 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
     }
     const n = nudges + 1;
     try {
-      (pi as unknown as { sendUserMessage(c: string, o?: unknown): void }).sendUserMessage(buildNudge(n, maxNudges), { deliverAs: "followUp" });
+      const sender = pi as unknown as { sendUserMessage(c: string, o?: unknown): Promise<void> | void };
+      await sender.sendUserMessage(buildNudge(n, maxNudges), { deliverAs: "followUp" });
       nudges = n;
       log("continue-on-early-stop premature-end", { reason: "ok", toolCalls, nudges });
-    } catch { /* send failed: stop nudging this turn */ }
+    } catch { /* send failed: budget untouched, stop nudging this turn */ }
   };
-  pi.on("turn_end", async () => { adjudicate(); });
-  pi.on("agent_end", async () => { adjudicate(); });
+  pi.on("turn_end", async () => { await adjudicate(); });
+  pi.on("agent_end", async () => { await adjudicate(); });
   void isOmp;
 }
