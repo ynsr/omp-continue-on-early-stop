@@ -1,2 +1,82 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-export default function continueOnEarlyStop(_pi: ExtensionAPI): void {}
+import { resolveConfig } from "./core/config";
+import { shouldContinue } from "./core/detect";
+import { stripToken } from "./core/strip";
+import { buildContract, buildNudge } from "./core/prompts";
+
+function isOmp(): boolean {
+  if (typeof Bun !== "undefined" && (Bun as unknown as { env?: Record<string, string> }).env?.OMPCODE === "1") return true;
+  const e = typeof process !== "undefined" ? process.env : {} as Record<string, string | undefined>;
+  const d = e.PI_CODING_AGENT_DIR ?? e.PI_CONFIG_DIR ?? "";
+  return /(?:^|[/])\.omp(?:[/]|$)/.test(d);
+}
+
+type Logger = { warn(m: string, c?: Record<string, unknown>): void };
+let log: Logger["warn"] = () => {};
+
+export default function continueOnEarlyStop(pi: ExtensionAPI): void {
+  try { pi.registerFlag("continue-max-nudges", { description: "Max continue nudges per intent (0=unbounded)", type: "string" }); } catch { /* host without flags */ }
+  try { pi.registerFlag("continue-min-tools", { description: "Min successful tool calls to arm detection", type: "string" }); } catch { /* host without flags */ }
+
+  let maxNudges = 20, minTools = 5;
+  let toolCalls = 0, hasToken = false, errorFlag = false, nudges = 0;
+  let settledLogged = false;
+
+  pi.on("session_start", async (_e, ctx) => {
+    const c = ctx as unknown as { logger?: Logger };
+    log = c.logger?.warn ? c.logger.warn.bind(c.logger) : console.warn;
+    try {
+      const f = pi.getFlag("continue-max-nudges");
+      const f2 = pi.getFlag("continue-min-tools");
+      const r = resolveConfig({ maxNudges: f, minTools: f2 });
+      maxNudges = r.maxNudges; minTools = r.minTools;
+    } catch { /* keep defaults */ }
+  });
+  pi.on("before_agent_start", async (e) => {
+    nudges = 0; toolCalls = 0; hasToken = false; errorFlag = false; settledLogged = false;
+    const base = typeof e === "object" && e !== null && "systemPrompt" in e && typeof e.systemPrompt === "string" ? e.systemPrompt : "";
+    return { systemPrompt: base + "\n\n" + buildContract() };
+  });
+  pi.on("turn_start", async () => { toolCalls = 0; hasToken = false; errorFlag = false; settledLogged = false; });
+  pi.on("tool_call", async () => { toolCalls++; });
+  pi.on("tool_result", async (e) => {
+    if (typeof e === "object" && e !== null && "isError" in e && e.isError === true && toolCalls > 0) toolCalls--;
+  });
+  pi.on("after_provider_response", async (e) => {
+    const s = typeof e === "object" && e !== null && "status" in e && typeof e.status === "number" ? e.status : 200;
+    if (s >= 400) { errorFlag = true; try { log("continue-on-early-stop provider-error", { status: s }); } catch { /* ignore */ } }
+  });
+  pi.on("message_end", async (e) => {
+    try {
+      const orig = e.message;
+      if (orig.role !== "assistant") return;
+      let found = false;
+      const content = orig.content.map((p) => {
+        if (p.type !== "text") return p;
+        const r = stripToken(p.text);
+        if (r.found) found = true;
+        return r.found ? { ...p, text: r.text } : p;
+      });
+      if (!found) return;
+      hasToken = true;
+      return { message: { ...orig, content } };
+    } catch { /* never throw */ }
+  });
+  const adjudicate = () => {
+    if (toolCalls === 0 && hasToken) { try { log("continue-on-early-stop suspect-token", {}); } catch { /* ignore */ } }
+    const { fire, reason } = shouldContinue({ toolCalls, minTools, hasToken, errorFlag, nudges, maxNudges });
+    if (!fire) {
+      if (!settledLogged) { settledLogged = true; try { log("continue-on-early-stop turn-settled", { reason, toolCalls }); } catch { /* ignore */ } }
+      return;
+    }
+    const n = nudges + 1;
+    try {
+      (pi as unknown as { sendUserMessage(c: string, o?: unknown): void }).sendUserMessage(buildNudge(n, maxNudges), { deliverAs: "followUp" });
+      nudges = n;
+      log("continue-on-early-stop premature-end", { reason: "ok", toolCalls, nudges });
+    } catch { /* send failed: stop nudging this turn */ }
+  };
+  pi.on("turn_end", async () => { adjudicate(); });
+  pi.on("agent_end", async () => { adjudicate(); });
+  void isOmp;
+}
