@@ -123,3 +123,19 @@ using* the flag, and `agent_settled` is where the queue-hold *releases*.
 Each event has its role; the token doesn't move, only its name did
 (`ALL_TASKS_DONE` → `DONE_WAITING_USER_PROMPT`: the token announces "this
 unit of work is closed, ready for your next prompt", not global completion).
+
+### Queued messages: harness-owned, extension does not re-queue (verdict)
+
+- The agent loop drains steering only after `turn_end` + tool batch, and
+  followUp only at loop-exit (`pi-agent-core/dist/agent-loop.js` runLoop).
+  Queued prompts cannot land mid-task; `steeringMode`/`followUpMode`
+  (`one-at-a-time`|`all`) control drain batching at the boundary only.
+- The extension therefore implements NO hold-until-settled gate. A second
+  extension-side queue (veto `input` → buffer → release at `agent_settled`)
+  was considered and rejected: it risks lost input (compaction re-entry,
+  runner invalidation, crash between hold and release), perturbs blind
+  harness-internal drain ordering against our own followUp nudge, and
+  depends on every client marking `streamingBehavior` correctly.
+- The nudge already races correctly: it fires at `turn_end`/`agent_end`
+  adjudication, i.e. before the loop-exit followUp drain, so completion
+  pressure lands before queued intents do.
