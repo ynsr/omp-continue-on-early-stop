@@ -30,9 +30,15 @@ describe("continue-on-early-stop", () => {
     await sess(pi);
     expect(await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "" })).toEqual({});
     expect(await pi.emit("before_agent_start", { prompt: "do x" })).toEqual({});
+    expect(await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: [] })).toEqual({});
     const r = await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "sys" }) as { systemPrompt?: string };
     expect(r.systemPrompt).toContain("sys");
     expect(r.systemPrompt).toContain("DONE_WAITING_USER_PROMPT");
+    // array form (real omp 18.5.1 host): append, preserve entries
+    const ra = await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: ["sys-a", "sys-b"] }) as { systemPrompt?: string };
+    expect(ra.systemPrompt).toContain("sys-a");
+    expect(ra.systemPrompt).toContain("sys-b");
+    expect(ra.systemPrompt).toContain("DONE_WAITING_USER_PROMPT");
   });
   test("nudges at agent_end after run-scoped successes without token", async () => {
     const pi = makePi();

@@ -34,11 +34,15 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
   });
   pi.on("before_agent_start", async (e) => {
     nudges = 0; toolCalls = 0; hasToken = false; errorFlag = false; settledLogged = false;
-    const base = typeof e === "object" && e !== null && "systemPrompt" in e && typeof e.systemPrompt === "string" ? e.systemPrompt : "";
+    const raw = typeof e === "object" && e !== null && "systemPrompt" in e ? e.systemPrompt : undefined;
+    // Host sends systemPrompt as string[] (single 17K-char entry in omp 18.5.1),
+    // despite bundled 0.84.4 types claiming string. Join defensively.
+    const parts = typeof raw === "string" ? [raw] : Array.isArray(raw) ? (raw as unknown[]).filter((p): p is string => typeof p === "string") : [];
+    const base = parts.join("\n\n");
     // Never override on empty/missing base: returning { systemPrompt: <contract-only> }
     // would replace the whole session prompt instead of appending to it.
     if (!base) return {};
-    return { systemPrompt: base + "\n\n" + buildContract() };
+    return { systemPrompt: [...parts, buildContract()].join("\n\n") };
   });
   pi.on("turn_start", async () => { settledLogged = false; });
   pi.on("tool_call", async () => { toolCalls++; });
