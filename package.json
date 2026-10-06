@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "bun test",
+    "e2e": "bun run e2e/run.ts",
     "build:omp": "bun build src/index.ts --target=bun --external:@earendil-works/pi-coding-agent --minify --outfile=omp-continue-on-early-stop.ts"
   },
   "license": "MIT",
