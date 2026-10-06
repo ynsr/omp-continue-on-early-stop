@@ -18,7 +18,7 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
   try { pi.registerFlag("continue-max-nudges", { description: "Max continue nudges per intent (0=unbounded)", type: "string" }); } catch { /* host without flags */ }
   try { pi.registerFlag("continue-min-tools", { description: "Min successful tool calls to arm detection", type: "string" }); } catch { /* host without flags */ }
 
-  let maxNudges = 20, minTools = 1;
+  let maxNudges = 20, minTools = 2;
   let toolCalls = 0, hasToken = false, errorFlag = false, nudges = 0;
   let settledLogged = false;
 

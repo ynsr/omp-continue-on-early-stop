@@ -12,7 +12,7 @@ the model resumes where it stopped.
 
 - **Completion contract.** Every turn's system prompt teaches the model to end its
   final message with `ALL_TASKS_DONE` on its own line, only when all work is done.
-- **Arming gate.** Detection arms only when the turn made `minTools` (default 1)
+- **Arming gate.** Detection arms only when the turn made `minTools` (default 2)
   successful tool calls — pure Q&A never nudges.
 - **Nudge.** On `turn_end`/`agent_end` with no token, enough successful calls, no
   provider-level error, and budget left, the extension sends a `<system-notice>`
@@ -32,7 +32,7 @@ Precedence: CLI flag > env var > default.
 | Setting | Flag | Env | Default |
 |---|---|---|---|
 | Max nudges/intent (0=unbounded) | `--continue-max-nudges` | `OMP_CONTINUE_MAX_NUDGES` | 20 |
-| Min successful calls to arm | `--continue-min-tools` | `OMP_CONTINUE_MIN_TOOLS` | 1 |
+| Min successful calls to arm | `--continue-min-tools` | `OMP_CONTINUE_MIN_TOOLS` | 2 |
 
 ## Install
 
