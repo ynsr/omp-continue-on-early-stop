@@ -46,20 +46,38 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
     const s = typeof e === "object" && e !== null && "status" in e && typeof e.status === "number" ? e.status : 200;
     if (s >= 400) { errorFlag = true; try { log("continue-on-early-stop provider-error", { status: s }); } catch { /* ignore */ } }
   });
+  // Primary strip: awaited content rewrite before history/transcript persistence.
+  // "assistant_message" is newer than the bundled 0.84.4 types, so register untyped.
+  const stripTextParts = (parts: { type: string; text?: string }[]): { found: boolean; content: { type: string; text?: string }[] } => {
+    let found = false;
+    const content = parts.map((p) => {
+      if (p.type !== "text" || typeof p.text !== "string") return p;
+      const r = stripToken(p.text);
+      if (r.found) found = true;
+      return r.found ? { ...p, text: r.text } : p;
+    });
+    return { found, content };
+  };
+  type LooseOn = { on(n: string, h: (e: { message?: { role?: string; content?: { type: string; text?: string }[] } }) => unknown): void };
+  (pi as unknown as LooseOn).on("assistant_message", async (e) => {
+    try {
+      const msg = e.message;
+      if (!msg || msg.role !== "assistant" || !Array.isArray(msg.content)) return;
+      const { found, content } = stripTextParts(msg.content);
+      if (!found) return;
+      hasToken = true;
+      // Hook contract: return ONLY { content }; block positions/metadata must be unchanged.
+      return { content };
+    } catch { /* never throw */ }
+  });
+  // Fallback: older hosts without the hook still get hasToken detection (no rewrite).
   pi.on("message_end", async (e) => {
     try {
       const orig = e.message;
       if (orig.role !== "assistant") return;
-      let found = false;
-      const content = orig.content.map((p) => {
-        if (p.type !== "text") return p;
-        const r = stripToken(p.text);
-        if (r.found) found = true;
-        return r.found ? { ...p, text: r.text } : p;
-      });
+      const { found } = stripTextParts(orig.content as { type: string; text?: string }[]);
       if (!found) return;
       hasToken = true;
-      return { message: { ...orig, content } };
     } catch { /* never throw */ }
   });
   const adjudicate = async () => {

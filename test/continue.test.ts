@@ -64,13 +64,15 @@ describe("continue-on-early-stop", () => {
     await p4.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(p4._sent.length).toBe(0);
   });
-  test("strips token in message_end", async () => {
+  test("message_end fallback still detects token (no rewrite)", async () => {
     const pi = makePi();
     continueOnEarlyStop(pi);
     await sess(pi);
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
-    const r = await pi.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "work summary\nALL_TASKS_DONE\n" }] } }) as { message?: { content?: { text?: string }[] } } | undefined;
-    expect(JSON.stringify(r?.message?.content ?? "")).not.toContain("ALL_TASKS_DONE");
+    for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
+    await pi.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "work summary\nALL_TASKS_DONE\n" }] } });
+    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    expect(pi._sent.length).toBe(0);
   });
   test("budget: no 21st send", async () => {
     const pi = makePi();
@@ -99,5 +101,13 @@ describe("continue-on-early-stop", () => {
     await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(calls).toBe(2);
+  });
+  test("strips token via assistant_message content channel", async () => {
+    const pi = makePi();
+    continueOnEarlyStop(pi);
+    await sess(pi);
+    await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
+    const r = await pi.emit("assistant_message", { message: { role: "assistant", content: [{ type: "text", text: "summary\nALL_TASKS_DONE\n" }] } }) as { content?: { text?: string }[] } | undefined;
+    expect(r?.content?.[0]?.text).toBe("summary");
   });
 });
