@@ -1,0 +1,18 @@
+{
+  "name": "omp-continue-on-early-stop",
+  "version": "0.1.0",
+  "description": "Detect premature LLM turn endings and nudge the model to continue (omp)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "build:omp": "bun build src/index.ts --target=bun --external:@earendil-works/pi-coding-agent --minify --outfile=omp-continue-on-early-stop.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}
