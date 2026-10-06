@@ -119,7 +119,8 @@ agent_settled ──► "fully done, nothing pending anywhere"
 The completion token (`DONE_WAITING_USER_PROMPT`) is model-uttered text,
 observed at the `assistant_message` hook (strip + `hasToken` flag). Harness
 events don't carry it — `turn_end`/`agent_end` are where we *adjudicate
-using* the flag, and `agent_settled` is where the queue-hold *releases*.
+using* the flag. `agent_settled` needs no action from this extension
+(terminal marker only; see queued-messages verdict below).
 Each event has its role; the token doesn't move, only its name did
 (`ALL_TASKS_DONE` → `DONE_WAITING_USER_PROMPT`: the token announces "this
 unit of work is closed, ready for your next prompt", not global completion).
