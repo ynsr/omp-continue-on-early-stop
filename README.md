@@ -11,7 +11,7 @@ the model resumes where it stopped.
 ## Behavior
 
 - **Completion contract.** Every turn's system prompt teaches the model to end its
-  final message with `ALL_TASKS_DONE` on its own line, only when all work is done.
+  final message with `DONE_WAITING_USER_PROMPT` on its own line when the current task is closed and it is ready for the user's next prompt.
 - **Arming gate.** Detection arms only when the turn made `minTools` (default 2)
   successful tool calls — pure Q&A never nudges.
 - **Nudge.** On `turn_end`/`agent_end` with no token, enough successful calls, no

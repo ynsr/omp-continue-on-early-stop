@@ -27,7 +27,7 @@ bun run e2e              # optional live test against real `omp -p` (see below)
   session against a live model over 7 scratch `.txt` files and asserts:
   1. a `premature-end` log fired (nudge loop armed + sent),
   2. extension logs present at all (extension loaded),
-  3. `ALL_TASKS_DONE` persists in no session-jsonl `text` part (strip guarantee;
+  3. `DONE_WAITING_USER_PROMPT` persists in no session-jsonl `text` part (strip guarantee;
      the nudge prompt itself is exempt).
 - **e2e usage:**
   - `bun run e2e -- --keep` — keep scratch dir + session jsonl for debugging

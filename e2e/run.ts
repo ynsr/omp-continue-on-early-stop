@@ -8,7 +8,7 @@
  *
  * Proves against a real harness:
  *   1. premature turn end is detected and nudged (followUp re-prompts)
- *   2. ALL_TASKS_DONE never persists in assistant text parts (strip works)
+ *   2. DONE_WAITING_USER_PROMPT never persists in assistant text parts (strip works)
  *   3. extension logs (premature-end / turn-settled / suspect-token) appear
  *
  * Model output is non-deterministic: a failing run is a debugging artifact
@@ -91,7 +91,7 @@ if (sessionFiles.length === 0) {
     const parts = (m.content ?? m.message) as { content?: { type?: string; text?: string }[] } | undefined;
     const arr = Array.isArray(parts) ? parts : Array.isArray(parts?.content) ? parts.content : [];
     for (const p of arr) {
-      if (p?.type === "text" && typeof p.text === "string" && p.text.includes("ALL_TASKS_DONE")) {
+      if (p?.type === "text" && typeof p.text === "string" && p.text.includes("DONE_WAITING_USER_PROMPT")) {
         const isNudge = p.text.includes("Continue (attempt");
         if (!isNudge) failures.push(`token leaked into persisted ${m.type ?? "?"} text part: ${JSON.stringify(p.text.slice(0, 120))}`);
       }

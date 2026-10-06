@@ -41,7 +41,7 @@ describe("continue-on-early-stop", () => {
     const p1 = makePi(); continueOnEarlyStop(p1); await sess(p1);
     await p1.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await p1.emit("tool_call", { toolName: "read", input: { path: "a" } }); await p1.emit("tool_result", { toolName: "read", content: [] }); }
-    await p1.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "done\nALL_TASKS_DONE" }] } });
+    await p1.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "done\nDONE_WAITING_USER_PROMPT" }] } });
     await p1.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(p1._sent.length).toBe(0);
     const p2 = makePi(); continueOnEarlyStop(p2);
@@ -74,7 +74,7 @@ describe("continue-on-early-stop", () => {
     await sess(pi);
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
-    await pi.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "work summary\nALL_TASKS_DONE\n" }] } });
+    await pi.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "work summary\nDONE_WAITING_USER_PROMPT\n" }] } });
     await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
     expect(pi._sent.length).toBe(0);
   });
@@ -111,7 +111,7 @@ describe("continue-on-early-stop", () => {
     continueOnEarlyStop(pi);
     await sess(pi);
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
-    const r = await pi.emit("assistant_message", { message: { role: "assistant", content: [{ type: "text", text: "summary\nALL_TASKS_DONE\n" }] } }) as { content?: { text?: string }[] } | undefined;
+    const r = await pi.emit("assistant_message", { message: { role: "assistant", content: [{ type: "text", text: "summary\nDONE_WAITING_USER_PROMPT\n" }] } }) as { content?: { text?: string }[] } | undefined;
     expect(r?.content?.[0]?.text).toBe("summary");
   });
 });
