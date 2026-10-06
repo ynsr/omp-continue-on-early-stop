@@ -24,17 +24,20 @@ function sess(pi: { emit(n: string, ...a: unknown[]): Promise<unknown> }, cwd = 
   return pi.emit("session_start", {}, { cwd, logger: undefined });
 }
 describe("continue-on-early-stop", () => {
-  test("nudges after 5 successes without token", async () => {
+  test("nudges at agent_end after run-scoped successes without token", async () => {
     const pi = makePi();
     continueOnEarlyStop(pi);
     await sess(pi);
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "sys" });
-    for (let i = 0; i < 5; i++) {
+    // two turns, 1 tool each: per-turn counting would see toolCalls=1 and stay silent
+    for (let t = 0; t < 2; t++) {
+      await pi.emit("turn_start", {});
       await pi.emit("tool_call", { toolName: "read", input: { path: "a" } });
       await pi.emit("tool_result", { toolName: "read", content: [] });
+      await pi.emit("turn_end", { turnIndex: t, message: {}, toolResults: [] });
     }
-    await pi.emit("message_end", { message: { role: "assistant", content: "half done" } });
-    await pi.emit("turn_end", { turnIndex: 0, message: { role: "assistant", content: "half done" }, toolResults: [] });
+    expect(pi._sent.length).toBe(0);
+    await pi.emit("agent_end", { messages: [] });
     expect(pi._sent.length).toBe(1);
   });
   test("silent with token / below gate / net-3-after-errors / provider-5xx", async () => {
@@ -42,14 +45,14 @@ describe("continue-on-early-stop", () => {
     await p1.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await p1.emit("tool_call", { toolName: "read", input: { path: "a" } }); await p1.emit("tool_result", { toolName: "read", content: [] }); }
     await p1.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "done\nDONE_WAITING_USER_PROMPT" }] } });
-    await p1.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await p1.emit("agent_end", { messages: [] });
     expect(p1._sent.length).toBe(0);
     const p2 = makePi(); continueOnEarlyStop(p2);
     (p2 as unknown as { getFlag: (n: string) => unknown }).getFlag = (n: string) => n === "continue-min-tools" ? 5 : undefined;
     await sess(p2);
     await p2.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 4; i++) { await p2.emit("tool_call", { toolName: "read", input: { path: "a" } }); await p2.emit("tool_result", { toolName: "read", content: [] }); }
-    await p2.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await p2.emit("agent_end", { messages: [] });
     expect(p2._sent.length).toBe(0);
     const p3 = makePi(); continueOnEarlyStop(p3);
     (p3 as unknown as { getFlag: (n: string) => unknown }).getFlag = (n: string) => n === "continue-min-tools" ? 5 : undefined;
@@ -59,13 +62,13 @@ describe("continue-on-early-stop", () => {
       await p3.emit("tool_call", { toolName: "read", input: { path: "a" } });
       await p3.emit("tool_result", { toolName: "read", content: [], isError: i < 2 });
     }
-    await p3.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await p3.emit("agent_end", { messages: [] });
     expect(p3._sent.length).toBe(0);
     const p4 = makePi(); continueOnEarlyStop(p4); await sess(p4);
     await p4.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await p4.emit("tool_call", { toolName: "read", input: { path: "a" } }); await p4.emit("tool_result", { toolName: "read", content: [] }); }
     await p4.emit("after_provider_response", { status: 500, headers: {} });
-    await p4.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await p4.emit("agent_end", { messages: [] });
     expect(p4._sent.length).toBe(0);
   });
   test("message_end fallback still detects token (no rewrite)", async () => {
@@ -75,7 +78,7 @@ describe("continue-on-early-stop", () => {
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
     await pi.emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "work summary\nDONE_WAITING_USER_PROMPT\n" }] } });
-    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await pi.emit("agent_end", { messages: [] });
     expect(pi._sent.length).toBe(0);
   });
   test("budget: no 21st send", async () => {
@@ -85,9 +88,8 @@ describe("continue-on-early-stop", () => {
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
     for (let t = 0; t < 21; t++) {
-      await pi.emit("turn_start", { turnIndex: t, timestamp: 0 });
       for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
-      await pi.emit("turn_end", { turnIndex: t, message: {}, toolResults: [] });
+      await pi.emit("agent_end", { messages: [] });
     }
     expect(pi._sent.length).toBe(20);
   });
@@ -102,8 +104,8 @@ describe("continue-on-early-stop", () => {
     await sess(pi);
     await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "s" });
     for (let i = 0; i < 5; i++) { await pi.emit("tool_call", { toolName: "read", input: { path: "a" } }); await pi.emit("tool_result", { toolName: "read", content: [] }); }
-    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
-    await pi.emit("turn_end", { turnIndex: 0, message: {}, toolResults: [] });
+    await pi.emit("agent_end", { messages: [] });
+    await pi.emit("agent_end", { messages: [] });
     expect(calls).toBe(2);
   });
   test("strips token via assistant_message content channel", async () => {

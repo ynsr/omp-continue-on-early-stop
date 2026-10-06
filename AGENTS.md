@@ -88,8 +88,8 @@ agent_settled ──► "fully done, nothing pending anywhere"
 ### Confusing pairs
 
 - **`turn_end` vs `agent_end`**: per-turn vs once-per-run. The adjudicator
-  listens to both: premature stops surface as a stalled last turn
-  (`agent_end`) or a mid-run stall (`turn_end`). Neither means "task complete".
+  listens to `agent_end` ONLY — per-turn adjudication double-nudges healthy
+  multi-turn runs (each `turn_end` fires before the next turn starts working).
 - **`message_end` is NOT the rewrite hook.** It looks like one (returns
   `MessageEndEventResult`), but the harness ignores the return for
   history/transcript — proven live (token persisted verbatim). The awaited
@@ -118,8 +118,8 @@ agent_settled ──► "fully done, nothing pending anywhere"
 
 The completion token (`DONE_WAITING_USER_PROMPT`) is model-uttered text,
 observed at the `assistant_message` hook (strip + `hasToken` flag). Harness
-events don't carry it — `turn_end`/`agent_end` are where we *adjudicate
-using* the flag. `agent_settled` needs no action from this extension
+events don't carry it — `agent_end` is where we *adjudicate using* the flag
+(run-scoped counters). `agent_settled` needs no action from this extension
 (terminal marker only; see queued-messages verdict below).
 Each event has its role; the token doesn't move, only its name did
 (`ALL_TASKS_DONE` → `DONE_WAITING_USER_PROMPT`: the token announces "this
@@ -133,13 +133,14 @@ unit of work is closed, ready for your next prompt", not global completion).
   but before agent loop"): resets `nudges`, `toolCalls`, `hasToken`,
   `errorFlag`, `settledLogged`, and appends the completion contract to the
   system prompt. A 5-exchange session fires it 5 times.
-- `turn_start` fires per turn: resets `toolCalls`, `hasToken`, `errorFlag`,
-  `settledLogged` — each turn is judged on its own work. `nudges` persists
-  across turns: the budget (default 20) is per user request, drawn down by
-  every stalled turn within that request's run.
-- Nothing resets on `agent_end`/`agent_settled`: a follow-up continuation of
-  the same intent inherits the remaining budget. Only a fresh user prompt
-  zeroes it (mid-run steering does not).
+- `turn_start` resets `settledLogged` only. `toolCalls`/`hasToken`/`errorFlag`
+  are RUN-scoped (accumulate across turns): sequential single-tool turns
+  (1 tool × 5 turns) arm the gate at `agent_end`, where a per-turn counter
+  would see `toolCalls=1` forever and stay silent. Proven by session
+  `01a11365` (5×`bash`, no nudge fired pre-fix).
+- `nudges` persists across turns and follow-up continuations: the budget
+  (default 20) is per user request. Only a fresh user prompt zeroes it
+  (mid-run steering does not).
 
 ### Queued messages: harness-owned, extension does not re-queue (verdict)
 

@@ -37,7 +37,7 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
     const base = typeof e === "object" && e !== null && "systemPrompt" in e && typeof e.systemPrompt === "string" ? e.systemPrompt : "";
     return { systemPrompt: base + "\n\n" + buildContract() };
   });
-  pi.on("turn_start", async () => { toolCalls = 0; hasToken = false; errorFlag = false; settledLogged = false; });
+  pi.on("turn_start", async () => { settledLogged = false; });
   pi.on("tool_call", async () => { toolCalls++; });
   pi.on("tool_result", async (e) => {
     if (typeof e === "object" && e !== null && "isError" in e && e.isError === true && toolCalls > 0) toolCalls--;
@@ -95,7 +95,8 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
       log("continue-on-early-stop premature-end", { reason: "ok", toolCalls, nudges });
     } catch { /* send failed: budget untouched, stop nudging this turn */ }
   };
-  pi.on("turn_end", async () => { await adjudicate(); });
+  // Adjudicate ONLY at agent_end: per-turn adjudication double-nudges healthy
+  // multi-turn runs (each turn_end fires before the next turn starts working).
   pi.on("agent_end", async () => { await adjudicate(); });
   void isOmp;
 }
