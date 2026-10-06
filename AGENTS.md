@@ -124,6 +124,22 @@ Each event has its role; the token doesn't move, only its name did
 (`ALL_TASKS_DONE` → `DONE_WAITING_USER_PROMPT`: the token announces "this
 unit of work is closed, ready for your next prompt", not global completion).
 
+### Extension state lifecycle
+
+- `session_start` fires once per session: config locks in here (flag > env >
+  default). No counters are touched.
+- `before_agent_start` fires once per user prompt ("after user submits prompt
+  but before agent loop"): resets `nudges`, `toolCalls`, `hasToken`,
+  `errorFlag`, `settledLogged`, and appends the completion contract to the
+  system prompt. A 5-exchange session fires it 5 times.
+- `turn_start` fires per turn: resets `toolCalls`, `hasToken`, `errorFlag`,
+  `settledLogged` — each turn is judged on its own work. `nudges` persists
+  across turns: the budget (default 20) is per user request, drawn down by
+  every stalled turn within that request's run.
+- Nothing resets on `agent_end`/`agent_settled`: a follow-up continuation of
+  the same intent inherits the remaining budget. Only a fresh user prompt
+  zeroes it (mid-run steering does not).
+
 ### Queued messages: harness-owned, extension does not re-queue (verdict)
 
 - The agent loop drains steering only after `turn_end` + tool batch, and
