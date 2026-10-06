@@ -35,6 +35,9 @@ export default function continueOnEarlyStop(pi: ExtensionAPI): void {
   pi.on("before_agent_start", async (e) => {
     nudges = 0; toolCalls = 0; hasToken = false; errorFlag = false; settledLogged = false;
     const base = typeof e === "object" && e !== null && "systemPrompt" in e && typeof e.systemPrompt === "string" ? e.systemPrompt : "";
+    // Never override on empty/missing base: returning { systemPrompt: <contract-only> }
+    // would replace the whole session prompt instead of appending to it.
+    if (!base) return {};
     return { systemPrompt: base + "\n\n" + buildContract() };
   });
   pi.on("turn_start", async () => { settledLogged = false; });

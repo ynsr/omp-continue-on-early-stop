@@ -24,6 +24,16 @@ function sess(pi: { emit(n: string, ...a: unknown[]): Promise<unknown> }, cwd = 
   return pi.emit("session_start", {}, { cwd, logger: undefined });
 }
 describe("continue-on-early-stop", () => {
+  test("no systemPrompt override on empty base", async () => {
+    const pi = makePi();
+    continueOnEarlyStop(pi);
+    await sess(pi);
+    expect(await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "" })).toEqual({});
+    expect(await pi.emit("before_agent_start", { prompt: "do x" })).toEqual({});
+    const r = await pi.emit("before_agent_start", { prompt: "do x", systemPrompt: "sys" }) as { systemPrompt?: string };
+    expect(r.systemPrompt).toContain("sys");
+    expect(r.systemPrompt).toContain("DONE_WAITING_USER_PROMPT");
+  });
   test("nudges at agent_end after run-scoped successes without token", async () => {
     const pi = makePi();
     continueOnEarlyStop(pi);
